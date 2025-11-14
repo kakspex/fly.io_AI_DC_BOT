@@ -5,7 +5,7 @@ import requests
 import discord
 from discord import app_commands
 
-HF_API = "https://kakspex-NEW_BOT_LOLZ.hf.space"
+HF_API = "https://huggingface.co/spaces/kakspex/DC_AI"
 TOKEN = os.environ.get("DISCORD_TOKEN")
 
 pending_tasks = {}
