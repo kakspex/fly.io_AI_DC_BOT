@@ -6,7 +6,6 @@ import discord
 from discord import app_commands
 
 HF_API = "https://huggingface.co/spaces/kakspex/NEW_BOT_LOLZ"
-
 TOKEN = os.environ["DISCORD_TOKEN"]
 
 pending_tasks = {}
