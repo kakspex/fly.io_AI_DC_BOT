@@ -5,8 +5,8 @@ import requests
 import discord
 from discord import app_commands
 
-HF_API = "https://huggingface.co/spaces/kakspex/NEW_BOT_LOLZ"
-TOKEN = os.environ["DISCORD_TOKEN"]
+HF_API = "https://kakspex-NEW_BOT_LOLZ.hf.space"
+TOKEN = os.environ.get("DISCORD_TOKEN")
 
 pending_tasks = {}
 task_lock = asyncio.Lock()
@@ -19,6 +19,7 @@ tree = app_commands.CommandTree(client)
 async def queue_task(prompt):
     async with task_lock:
         r = requests.post(f"{HF_API}/generate", json={"prompt":prompt})
+        r.raise_for_status()
         data = r.json()
         return data["task_id"]
 
@@ -28,16 +29,26 @@ async def wait_for_result(task_id):
     while not done:
         await asyncio.sleep(1)
         r2 = requests.get(f"{HF_API}/result/{task_id}")
-        data = r2.json()
-        if data["status"] == "completed":
+        if r2.status_code == 404:
+            return "task not found"
+        j = r2.json()
+        status = j.get("status", "")
+        if status == "completed":
+            output = j.get("output", "")
             done = True
-            output = data["output"]
+        elif status in ("error","failed"):
+            output = j.get("output", "") or status
+            done = True
     return output
 
 @tree.command(name="ai")
 async def ai_command(interaction, prompt: str):
-    await interaction.response.send_message("Processing")
-    task_id = await queue_task(prompt)
+    await interaction.response.send_message("thinking")
+    try:
+        task_id = await queue_task(prompt)
+    except Exception as e:
+        await interaction.edit_original_response(content="request error")
+        return
     result = await wait_for_result(task_id)
     await interaction.edit_original_response(content=result)
 
@@ -53,9 +64,12 @@ async def runqueue(interaction):
     keys = list(pending_tasks.keys())
     for task_id in keys:
         prompt = pending_tasks[task_id]
-        real_task = await queue_task(prompt)
-        result = await wait_for_result(real_task)
-        await interaction.followup.send("Task " + task_id + ": " + result)
+        try:
+            real_task = await queue_task(prompt)
+            result = await wait_for_result(real_task)
+            await interaction.followup.send("Task " + task_id + ": " + result)
+        except Exception as e:
+            await interaction.followup.send("Task " + task_id + ": error")
         del pending_tasks[task_id]
 
 @tree.command(name="ping")
