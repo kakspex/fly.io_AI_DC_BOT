@@ -40,7 +40,7 @@ async def wait_for_result(task_id):
     try:
         while True:
             await asyncio.sleep(1)
-            async with asyncio.timeout(20):
+            async with asyncio.timeout(90):
                 async with http_session.get(f"{HF_API}/result/{task_id}") as r2:
                     if r2.status == 404:
                         return "task not found"
