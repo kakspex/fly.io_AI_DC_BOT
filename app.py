@@ -5,9 +5,8 @@ import aiohttp
 import discord
 from discord import app_commands
 
-HF_API = "https://kakspex-DC_AI.hf.space"
+HF_API = os.environ.get("HF_API", "https://kakspex-DC_AI.hf.space")
 TOKEN = os.environ.get("DISCORD_TOKEN")
-
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN missing")
 
@@ -23,33 +22,48 @@ http_session = None
 
 async def queue_task(prompt):
     prompt = prompt.strip()
-    if len(prompt) > 500:
-        prompt = prompt[:500]
-    async with task_lock:
-        try:
-            async with asyncio.timeout(15):
-                async with http_session.post(f"{HF_API}/generate", json={"prompt": prompt}) as r:
-                    data = await r.json()
-                    return data.get("task_id", None)
-        except:
-            return None
+    if len(prompt) > 1000:
+        prompt = prompt[:1000]
+    try:
+        async with asyncio.timeout(20):
+            async with http_session.post(f"{HF_API}/generate", json={"prompt": prompt}) as r:
+                if r.status != 202:
+                    try:
+                        j = await r.json()
+                        return j.get("task_id")
+                    except:
+                        return None
+                j = await r.json()
+                return j.get("task_id")
+    except:
+        return None
 
-async def wait_for_result(task_id):
+async def wait_for_result(task_id, total_timeout=120):
     if not task_id:
         return "invalid"
+    start = asyncio.get_event_loop().time()
     try:
         while True:
             await asyncio.sleep(1)
-            async with asyncio.timeout(90):
-                async with http_session.get(f"{HF_API}/result/{task_id}") as r2:
-                    if r2.status == 404:
-                        return "task not found"
-                    j = await r2.json()
-                    status = j.get("status", "")
-                    if status == "completed":
-                        return j.get("output", "")
-                    if status in ("error", "failed"):
-                        return j.get("output", "") or status
+            elapsed = asyncio.get_event_loop().time() - start
+            if elapsed > total_timeout:
+                return "timeout"
+            try:
+                async with asyncio.timeout(10):
+                    async with http_session.get(f"{HF_API}/result/{task_id}") as r2:
+                        if r2.status == 404:
+                            return "task not found"
+                        j = await r2.json()
+                        status = j.get("status", "")
+                        if status == "completed":
+                            return j.get("output", "")
+                        if status in ("error", "failed"):
+                            return j.get("output", "") or status
+            except asyncio.TimeoutError:
+                continue
+            except:
+                await asyncio.sleep(1)
+                continue
     except:
         return "error"
 
@@ -61,7 +75,13 @@ async def ai_command(interaction, prompt: str):
         if not task_id:
             await interaction.edit_original_response(content="request error")
             return
-        result = await wait_for_result(task_id)
+        result = await wait_for_result(task_id, total_timeout=120)
+        if not result:
+            await interaction.edit_original_response(content="no output")
+            return
+        if len(result) > 2000:
+            await interaction.edit_original_response(content=result[:1990] + "...")
+            return
         await interaction.edit_original_response(content=result)
     except:
         await interaction.edit_original_response(content="error")
@@ -70,7 +90,7 @@ async def ai_command(interaction, prompt: str):
 async def queue_command(interaction, prompt: str):
     async with task_lock:
         task_id = str(uuid.uuid4())
-        pending_tasks[task_id] = prompt.strip()[:500]
+        pending_tasks[task_id] = prompt.strip()[:1000]
     await interaction.response.send_message("Task added: " + task_id)
 
 @tree.command(name="runqueue")
@@ -83,8 +103,10 @@ async def runqueue(interaction):
             prompt = pending_tasks.get(task_id)
         try:
             real_task = await queue_task(prompt)
-            result = await wait_for_result(real_task)
-            await interaction.followup.send("Task " + task_id + ": " + result)
+            result = await wait_for_result(real_task, total_timeout=120)
+            if not result:
+                result = "no output"
+            await interaction.followup.send("Task " + task_id + ": " + (result if len(result) < 1900 else result[:1890] + "..."))
         except:
             await interaction.followup.send("Task " + task_id + ": error")
         async with task_lock:
@@ -101,10 +123,12 @@ async def on_ready():
 
 async def start():
     global http_session
-    http_session = aiohttp.ClientSession()
+    timeout = aiohttp.ClientTimeout(total=None)
+    http_session = aiohttp.ClientSession(timeout=timeout)
     try:
         await client.start(TOKEN)
     finally:
         await http_session.close()
 
-asyncio.run(start())
+if __name__ == "__main__":
+    asyncio.run(start())
