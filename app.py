@@ -18,15 +18,14 @@ tree = app_commands.CommandTree(client)
 
 async def queue_task(prompt):
     async with task_lock:
-        r = requests.post(f"{HF_API}/generate", json={"prompt":prompt})
+        r = requests.post(f"{HF_API}/generate", json={"prompt": prompt})
         r.raise_for_status()
         data = r.json()
         return data["task_id"]
 
 async def wait_for_result(task_id):
-    done = False
     output = ""
-    while not done:
+    while True:
         await asyncio.sleep(1)
         r2 = requests.get(f"{HF_API}/result/{task_id}")
         if r2.status_code == 404:
@@ -34,19 +33,16 @@ async def wait_for_result(task_id):
         j = r2.json()
         status = j.get("status", "")
         if status == "completed":
-            output = j.get("output", "")
-            done = True
-        elif status in ("error","failed"):
-            output = j.get("output", "") or status
-            done = True
-    return output
+            return j.get("output", "")
+        if status in ("error", "failed"):
+            return j.get("output", "") or status
 
 @tree.command(name="ai")
 async def ai_command(interaction, prompt: str):
-    await interaction.response.send_message("thinking")
+    await interaction.response.defer()
     try:
         task_id = await queue_task(prompt)
-    except Exception as e:
+    except Exception:
         await interaction.edit_original_response(content="request error")
         return
     result = await wait_for_result(task_id)
@@ -68,7 +64,7 @@ async def runqueue(interaction):
             real_task = await queue_task(prompt)
             result = await wait_for_result(real_task)
             await interaction.followup.send("Task " + task_id + ": " + result)
-        except Exception as e:
+        except Exception:
             await interaction.followup.send("Task " + task_id + ": error")
         del pending_tasks[task_id]
 
@@ -84,3 +80,4 @@ async def start():
     await client.start(TOKEN)
 
 asyncio.run(start())
+
