@@ -25,17 +25,20 @@ async def queue_task(prompt):
     if len(p) > 4000:
         p = p[:4000]
     try:
-        async with asyncio.timeout(10):
-            async with http_session.post(f"{HF_API}/generate", json={"prompt": p, "max_new_tokens": 128}) as r:
+        async with asyncio.timeout(45):
+            async with http_session.post(f"{HF_API}/generate", json={"prompt": p, "max_length": 128}) as r:
                 if r.status not in (200, 202):
                     try:
                         j = await r.json()
                         return j.get("task_id")
                     except:
+                        text = await r.text()
+                        print("generate-error-status", r.status, text)
                         return None
                 j = await r.json()
                 return j.get("task_id")
-    except:
+    except Exception as e:
+        print("generate-exception", str(e))
         return None
 
 async def fetch_result(task_id):
