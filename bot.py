@@ -5,7 +5,7 @@ import aiohttp
 import discord
 from discord import app_commands
 
-HF_API = os.environ.get("HF_API", "https://kakspex-DC_AI.hf.space")
+HF_API = os.environ.get("HF_API", "https://kakspex-dc-ai.hf.space")
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN missing")
