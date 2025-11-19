@@ -20,7 +20,7 @@ async def request_generate(prompt):
     p = prompt.strip()[:2000]
     try:
         async with asyncio.timeout(10):
-            async with http_session.post(f"{HF_API}/generate", json={"prompt": p, "max_new_tokens": 64}) as r:
+            async with http_session.post(f"{HF_API}/generate", json={"prompt": p, "max_length": 64}) as r:
                 try:
                     j = await r.json()
                 except:
