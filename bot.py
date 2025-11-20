@@ -19,7 +19,7 @@ http_session = None
 async def request_generate(prompt):
     p = prompt.strip()[:2000]
     try:
-        async with asyncio.timeout(10):
+        async with asyncio.timeout(30):
             async with http_session.post(f"{HF_API}/generate", json={"prompt": p, "max_length": 64}) as r:
                 try:
                     j = await r.json()
@@ -31,7 +31,7 @@ async def request_generate(prompt):
 
 async def request_result(task_id):
     try:
-        async with asyncio.timeout(10):
+        async with asyncio.timeout(30):
             async with http_session.get(f"{HF_API}/result/{task_id}") as r:
                 try:
                     j = await r.json()
@@ -46,7 +46,7 @@ async def wait_result(interaction, task_id):
     last = ""
     while True:
         await asyncio.sleep(0.8)
-        if asyncio.get_running_loop().time() - start > 120:
+        if asyncio.get_running_loop().time() - start > 180:
             return "timeout"
         j = await request_result(task_id)
         s = j.get("status")
@@ -80,7 +80,7 @@ async def ai_command(interaction, prompt: str):
 
 @tree.command(name="print")
 async def ping(interaction):
-    await interaction.response.send_message("Hello World!")
+    await interaction.response.send_message("Hello World")
 
 @client.event
 async def on_ready():
